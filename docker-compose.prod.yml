@@ -1,0 +1,56 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      PROJECT_DATABASE_URL: mysql+pymysql://${PROJECT_DB_USER}:${PROJECT_DB_PASSWORD}@mysql:3306/gestao_projetos_sisfron?charset=utf8mb4
+      COST_DATABASE_URL: mysql+pymysql://${COST_DB_USER}:${COST_DB_PASSWORD}@mysql:3306/gestao_custos_sisfron?charset=utf8mb4
+      CORS_ORIGINS: ${APP_ORIGIN:-http://192.168.30.10:5280}
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-480}
+    volumes:
+      - app_storage:/srv/storage
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    mem_limit: 1g
+    networks:
+      - app
+      - radar
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "192.168.30.10:5280:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 128m
+    networks:
+      - app
+
+volumes:
+  app_storage:
+
+networks:
+  app:
+    internal: true
+  radar:
+    external: true
+    name: radarorfin_internal
