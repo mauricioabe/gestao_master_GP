@@ -1,0 +1,27 @@
+import {ArrowForward,AssignmentTurnedInOutlined,FolderSpecialOutlined,LinkOutlined,ScheduleOutlined,TrendingUp} from '@mui/icons-material';
+import {Alert,Box,Button,Card,CardContent,LinearProgress,Skeleton,Stack,Typography} from '@mui/material';
+import {useQuery} from '@tanstack/react-query';
+import {Link} from 'react-router-dom';
+import {api,DashboardData,Project} from '../api';
+import StatusChip from '../components/StatusChip';
+
+const money=(value:number|null)=>value==null?'Nao informado':new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0}).format(value);
+
+export default function Dashboard(){
+  const summary=useQuery({queryKey:['dashboard'],queryFn:()=>api.get<DashboardData>('/dashboard').then(r=>r.data)});
+  const projects=useQuery({queryKey:['projects'],queryFn:()=>api.get<Project[]>('/projects').then(r=>r.data)});
+  const data=summary.data;
+  const cards=[
+    {label:'Projetos cadastrados',value:data?.total_projects,icon:<FolderSpecialOutlined/>,color:'#2d6fac'},
+    {label:'Em execucao',value:data?.active_projects,icon:<TrendingUp/>,color:'#16805b'},
+    {label:'Contratos vinculados',value:data?.linked_contracts,icon:<LinkOutlined/>,color:'#d79a22'},
+    {label:'Projetos em atraso',value:data?.delayed_projects,icon:<ScheduleOutlined/>,color:'#c33b3b'},
+  ];
+  return <Box>
+    <Box sx={{position:'relative',overflow:'hidden',borderRadius:3,mb:3,minHeight:190,color:'#fff',background:'linear-gradient(100deg,rgba(7,29,61,.98) 0%,rgba(10,59,114,.92) 52%,rgba(10,59,114,.35) 100%), url(/dashboard-hero.png) center right/cover'}}><Box sx={{p:{xs:3,md:4},maxWidth:690}}><Typography variant="overline" sx={{color:'#efbd55',fontWeight:900,letterSpacing:1.5}}>PLANEJAMENTO, CONTROLE E INDICADORES</Typography><Typography variant="h4" mt={.5}>Gestao de Projetos SAD</Typography><Typography sx={{opacity:.82,mt:1,maxWidth:590}}>Acompanhe a evolucao dos projetos estrategicos, seus prazos e contratos em um unico ambiente.</Typography><Button component={Link} to="/projetos" variant="contained" color="secondary" endIcon={<ArrowForward/>} sx={{mt:2.4,color:'#071d3d'}}>Gerenciar projetos</Button></Box></Box>
+    {(summary.isError||projects.isError)&&<Alert severity="warning" sx={{mb:3}}>A API nao esta disponivel. Inicie o backend para carregar os dados.</Alert>}
+    <Box sx={{display:'grid',gridTemplateColumns:{xs:'1fr',sm:'repeat(2,1fr)',xl:'repeat(4,1fr)'},gap:2.2,mb:3}}>{cards.map(card=><Card key={card.label}><CardContent><Stack direction="row" justifyContent="space-between"><Box><Typography variant="body2" color="text.secondary" fontWeight={650}>{card.label}</Typography>{summary.isLoading?<Skeleton width={60} height={46}/>:<Typography variant="h4" mt={.6}>{card.value??0}</Typography>}</Box><Box sx={{width:46,height:46,borderRadius:2,display:'grid',placeItems:'center',color:card.color,bgcolor:`${card.color}14`}}>{card.icon}</Box></Stack></CardContent></Card>)}</Box>
+    <Box sx={{display:'grid',gridTemplateColumns:{xs:'1fr',lg:'1.6fr .8fr'},gap:2.2}}><Card><CardContent><Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}><Box><Typography variant="h6">Projetos recentes</Typography><Typography variant="body2" color="text.secondary">Ultimas atualizacoes do portfolio</Typography></Box><Button component={Link} to="/projetos" endIcon={<ArrowForward/>}>Ver todos</Button></Stack>{projects.isLoading?<Skeleton height={230}/>:projects.data?.length?<Stack spacing={1.2}>{projects.data.slice(0,5).map(project=><Box key={project.id} sx={{display:'grid',gridTemplateColumns:{xs:'1fr',sm:'1.4fr .8fr 1fr'},alignItems:'center',gap:2,p:1.5,border:'1px solid #e5ebf2',borderRadius:2}}><Box><Typography fontWeight={800}>{project.name}</Typography><Typography variant="caption" color="text.secondary">{project.code} · {project.manager}</Typography></Box><StatusChip status={project.status}/><Box><Stack direction="row" justifyContent="space-between"><Typography variant="caption">Progresso</Typography><Typography variant="caption" fontWeight={800}>{project.progress}%</Typography></Stack><LinearProgress variant="determinate" value={project.progress} sx={{mt:.7,height:6,borderRadius:6}}/></Box></Box>)}</Stack>:<Box textAlign="center" py={5}><AssignmentTurnedInOutlined sx={{fontSize:46,color:'#9db0c4'}}/><Typography fontWeight={800} mt={1}>Nenhum projeto cadastrado</Typography><Typography variant="body2" color="text.secondary">Comece cadastrando o primeiro projeto SAD.</Typography></Box>}</CardContent></Card><Card><CardContent><Typography variant="h6">Progresso medio</Typography><Typography variant="body2" color="text.secondary">Consolidado do portfolio</Typography><Box sx={{width:170,height:170,borderRadius:'50%',mx:'auto',my:3,display:'grid',placeItems:'center',background:`conic-gradient(#16805b ${(data?.average_progress||0)*3.6}deg,#e8edf3 0)`,position:'relative','&:after':{content:'""',position:'absolute',inset:17,borderRadius:'50%',bgcolor:'#fff'}}}><Box sx={{zIndex:1,textAlign:'center'}}><Typography variant="h4">{data?.average_progress??0}%</Typography><Typography variant="caption" color="text.secondary">concluido</Typography></Box></Box><Typography variant="body2" fontWeight={800}>Investimento vinculado</Typography><Typography variant="h6" color="primary.main">{money(projects.data?.flatMap(p=>p.contracts).reduce((acc,c)=>acc+Number(c.global_value||0),0)||0)}</Typography></CardContent></Card></Box>
+  </Box>;
+}
+

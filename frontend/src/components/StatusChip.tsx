@@ -1,0 +1,5 @@
+import {Chip} from '@mui/material';
+
+const labels:Record<string,string>={PLANEJAMENTO:'Planejamento',NAO_INICIADO:'Nao iniciado',PRE_PROJETO:'Pre-projeto',EXECUCAO:'Execucao',EM_EXECUCAO:'Em execucao',ENCERRAMENTO:'Encerramento',ENCERRADO:'Encerrado',CONCLUIDO:'Concluido',SUSPENSO:'Suspenso',ATRASADO:'Atrasado'};
+const colors:Record<string,'default'|'info'|'success'|'warning'|'error'>={PLANEJAMENTO:'info',NAO_INICIADO:'default',PRE_PROJETO:'info',EXECUCAO:'info',EM_EXECUCAO:'success',ENCERRAMENTO:'warning',ENCERRADO:'success',CONCLUIDO:'success',SUSPENSO:'warning',ATRASADO:'error'};
+export default function StatusChip({status}:{status:string}){return <Chip size="small" label={labels[status]||status} color={colors[status]||'default'} sx={{fontWeight:800,textTransform:'uppercase',fontSize:10}}/>}
