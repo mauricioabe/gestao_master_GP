@@ -50,7 +50,7 @@ volumes:
 
 networks:
   app:
-    internal: true
+    driver: bridge
   radar:
     external: true
     name: radarorfin_internal
