@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
     project_database_url: str
     cost_database_url: str
+    jwt_secret: str = "altere-esta-chave-em-producao"
+    jwt_expire_minutes: int = 480
     cors_origins: str = "http://localhost:5174"
     model_config = SettingsConfigDict(env_file="../.env", extra="ignore")
 
@@ -37,4 +39,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-

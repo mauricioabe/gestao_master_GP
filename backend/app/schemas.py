@@ -4,6 +4,45 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
+class LoginRequest(BaseModel):
+    login: str = Field(min_length=2, max_length=80)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    role: str
+    name: str
+    permissions: list[str]
+
+
+class UserCreate(BaseModel):
+    login: str = Field(min_length=2, max_length=80, pattern=r"^[A-Za-z0-9._-]+$")
+    name: str = Field(min_length=3, max_length=150)
+    password: str = Field(min_length=8, max_length=128)
+    role: str
+
+
+class UserUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=3, max_length=150)
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+    role: str | None = None
+    active: bool | None = None
+
+
+class UserOut(BaseModel):
+    id: int
+    login: str
+    name: str
+    role: str
+    active: bool
+    last_login_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ContractSnapshot(BaseModel):
     external_contract_id: str = Field(max_length=60)
     contract_number: str | None = None

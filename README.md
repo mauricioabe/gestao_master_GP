@@ -33,7 +33,8 @@ Requisitos: Python 3.12+, Node.js 20+ e MySQL 8.
 2. Ajuste `COST_DATABASE_URL` no `.env` para um usuario com privilegio `SELECT` apenas.
 3. Crie somente o novo schema com `mysql -u root -p < database/bootstrap.sql`.
 4. No backend, execute `pip install -e ".[test]"`, `alembic upgrade head` e `uvicorn app.main:app --reload --port 8011`.
-5. No frontend, execute `npm install` e `npm run dev`.
+5. Antes do primeiro acesso, crie o Gestor do Programa com `python scripts_create_manager.py`, dentro da pasta `backend`.
+6. No frontend, execute `npm install` e `npm run dev`.
 
 Interface: `http://localhost:5174`  
 Documentacao da API: `http://localhost:8011/docs`
@@ -46,7 +47,19 @@ Documentacao da API: `http://localhost:8011/docs`
 - consulta de contratos diretamente no Radar;
 - vinculo N:N entre projetos e contratos, sem duplicar o cadastro de contratos;
 - layout responsivo com menu no padrao estrutural do Radar;
+- autenticacao JWT, sessao protegida e administracao de usuarios;
+- controle de acesso por perfil para Gestor do Programa, Gerente de Projetos, Supervisor do Projeto, Analista de Projetos e Equipe de Projeto;
 - modulos futuros sinalizados no menu para a evolucao incremental.
+
+## Perfis e permissoes
+
+- **Gestor do Programa:** acesso integral e administracao de usuarios.
+- **Gerente de Projetos:** gerencia projetos, subprojetos, cronogramas e documentos.
+- **Supervisor do Projeto:** consulta projetos e gerencia subprojetos, cronogramas e documentos.
+- **Analista de Projetos:** consulta projetos e gerencia subprojetos, cronogramas e documentos.
+- **Equipe de Projeto:** consulta projetos e atualiza cronogramas.
+
+Defina um `JWT_SECRET` exclusivo e seguro no `.env` antes de disponibilizar o sistema em producao. O token expira conforme `JWT_EXPIRE_MINUTES`.
 
 ## Validacao
 
@@ -61,8 +74,6 @@ Os testes do backend incluem a verificacao explicita de que comandos de escrita 
 
 ## Proximas etapas
 
-- autenticacao e RBAC integrados ao modelo institucional;
-- atividades, marcos, dependencias e Gantt;
+- integracao da autenticacao ao provedor de identidade institucional;
 - indicadores historicos e alertas;
-- relatorios e exportacoes;
-- plano validado de migracao dos dados selecionados do `mc2-project`.
+- relatorios e exportacoes.
