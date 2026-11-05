@@ -305,7 +305,10 @@ def _serialize(item: Activity, items: list[Activity] | None = None) -> dict:
         "duration_days": _business_days(start_date, finish_date),
         "start_date": start_date,
         "finish_date": finish_date,
-        "resource_names": None if direct_children else item.resource_names,
+        # Recursos podem ser definidos tambem no entregavel/atividade-pai.
+        # Os demais campos abaixo sao consolidados pelos filhos, mas o nome
+        # dos recursos pertence a propria linha e deve ser preservado.
+        "resource_names": item.resource_names,
         "execution_percentage": execution,
         "planned_value": planned_value,
         "actual_value": actual_value,
