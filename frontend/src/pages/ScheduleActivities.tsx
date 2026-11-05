@@ -1,5 +1,5 @@
-import {FocusEvent,KeyboardEvent,useEffect,useMemo,useRef,useState} from 'react';
-import {Add,ArrowBack,AutoFixHighOutlined,CalendarMonthOutlined,CancelOutlined,CheckCircleOutline,ChevronRight,CloudDownloadOutlined,DeleteOutline,EditOutlined,ExpandMore,FormatIndentDecreaseOutlined,FormatIndentIncreaseOutlined,PendingActionsOutlined,PlayCircleOutline,SaveOutlined,WarningAmberOutlined} from '@mui/icons-material';
+import {DragEvent,FocusEvent,KeyboardEvent,useEffect,useMemo,useRef,useState} from 'react';
+import {Add,ArrowBack,AutoFixHighOutlined,CalendarMonthOutlined,CancelOutlined,CheckCircleOutline,ChevronRight,CloudDownloadOutlined,DeleteOutline,DragIndicatorOutlined,EditOutlined,ExpandMore,FormatIndentDecreaseOutlined,FormatIndentIncreaseOutlined,PendingActionsOutlined,PlayCircleOutline,SaveOutlined,WarningAmberOutlined} from '@mui/icons-material';
 import {Alert,Box,Breadcrumbs,Button,Card,CardContent,Checkbox,Chip,Dialog,DialogActions,DialogContent,DialogTitle,IconButton,InputAdornment,LinearProgress,Link as MuiLink,MenuItem,Skeleton,Stack,Table,TableBody,TableCell,TableContainer,TableHead,TableRow,TextField,Tooltip,Typography} from '@mui/material';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {Link,useNavigate,useParams} from 'react-router-dom';
@@ -20,6 +20,7 @@ const finishForBusinessDays=(start:string,days:number)=>{const d=iso(start);let 
 const money=(value:number|string|null)=>value==null?'-':new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(value));
 type EditableField='name'|'start_date'|'finish_date'|'resource_names'|'execution_percentage'|'planned_value'|'actual_value'|'predecessor_id';
 type InlineEdit={activityId:number;field:EditableField};
+type DropPosition='before'|'after';
 
 export default function ScheduleActivities({mode='milestones'}:{mode?:'milestones'|'project'}){
   const {subprojectId}=useParams();
@@ -40,6 +41,8 @@ export default function ScheduleActivities({mode='milestones'}:{mode?:'milestone
   const [selectedCff,setSelectedCff]=useState<Set<number>>(()=>new Set());
   const [cffParentId,setCffParentId]=useState<number|''>('');
   const [cffResult,setCffResult]=useState('');
+  const [draggedId,setDraggedId]=useState<number|null>(null);
+  const [dragOver,setDragOver]=useState<{id:number;position:DropPosition}|null>(null);
   const skipInlineBlur=useRef(false);
   // Duracao do formulario no momento em que o inicio entra em edicao.
   const formDuration=useRef(0);
@@ -55,6 +58,7 @@ const refreshProgress=()=>Promise.all([queryClient.invalidateQueries({queryKey:a
   const items=activities.data||[];
   const cffParents=items.filter(item=>item.source_system!=='RADAR_CFF');
   const byId=useMemo(()=>new Map(items.map(item=>[item.id,item])),[items]);
+  const draggedBlockIds=useMemo(()=>{const block=new Set<number>();if(draggedId===null)return block;for(const item of items){let current:Activity|undefined=item;const visited=new Set<number>();while(current&&!visited.has(current.id)){visited.add(current.id);if(current.id===draggedId){block.add(item.id);break}current=current.parent_id?byId.get(current.parent_id):undefined}}return block},[draggedId,items,byId]);
 const visibleItems=useMemo(()=>items.filter(item=>{let parentId=item.parent_id;const visited=new Set<number>();while(parentId&&byId.has(parentId)&&!visited.has(parentId)){if(collapsed.has(parentId))return false;visited.add(parentId);parentId=byId.get(parentId)!.parent_id}return true}),[items,byId,collapsed]);
   const importableCff=cff.data?.stages.filter(stage=>stage.importable)||[];
   const toggleCff=(stageId:number)=>setSelectedCff(current=>{const next=new Set(current);next.has(stageId)?next.delete(stageId):next.add(stageId);return next});
@@ -70,6 +74,7 @@ const visibleItems=useMemo(()=>items.filter(item=>{let parentId=item.parent_id;c
   const save=useMutation({mutationFn:()=>editing?api.put(`/activities/${editing.id}`,form):api.post(collectionPath,form),onSuccess:async()=>{close();await refreshProgress()},onError:(err:any)=>setError(err.response?.data?.detail?.[0]?.msg||err.response?.data?.detail||'Nao foi possivel salvar a atividade.')});
   const remove=useMutation({mutationFn:(activityId:number)=>api.delete(`/activities/${activityId}`),onSuccess:()=>refreshProgress(),onError:(err:any)=>setError(err.response?.data?.detail||'Nao foi possivel excluir a atividade.')});
 const hierarchy=useMutation({mutationFn:({activityId,action}:{activityId:number;action:'indent'|'outdent'})=>api.post<Activity[]>(`/activities/${activityId}/${action}`),onSuccess:async response=>{queryClient.setQueryData(activityQueryKey,response.data);await refreshProgress()},onError:(err:any)=>setError(err.response?.data?.detail||'Nao foi possivel alterar o nivel da atividade.')});
+  const reorder=useMutation({mutationFn:({activityId,targetId,position}:{activityId:number;targetId:number;position:DropPosition})=>api.post<Activity[]>(`/activities/${activityId}/reorder`,{target_id:targetId,position}),onSuccess:async response=>{queryClient.setQueryData(activityQueryKey,response.data);setError('');await refreshProgress()},onError:(err:any)=>setError(err.response?.data?.detail||'Nao foi possivel mover a atividade.'),onSettled:()=>{setDraggedId(null);setDragOver(null)}});
   const importCff=useMutation({
     mutationFn:()=>api.post<CffImportResult>(`/subprojects/${id}/cff/import`,{stage_ids:Array.from(selectedCff),parent_activity_id:cffParentId}),
     onSuccess:async response=>{
@@ -135,6 +140,10 @@ const hierarchy=useMutation({mutationFn:({activityId,action}:{activityId:number;
   const adjustForm=()=>{if(!selectedPredecessor)return;const days=duration(form.start_date||selectedPredecessor.finish_date,form.finish_date||form.start_date||selectedPredecessor.finish_date);const start=nextBusinessDay(selectedPredecessor.finish_date);setForm({...form,start_date:start,finish_date:finishForBusinessDays(start,days)});setError('')};
   const submit=()=>{setError('');if(!form.name.trim()||!form.start_date||!form.finish_date){setError('Informe o nome, a data de inicio e a data de termino.');return}if(formConflict){setError('A atividade sucessora deve iniciar depois do termino da predecessora. Use Ajustar datas.');return}save.mutate()};
   const removeItem=(item:Activity)=>{if(window.confirm(`Excluir a atividade "${item.name}"?`))remove.mutate(item.id)};
+  const dragStart=(event:DragEvent<HTMLElement>,item:Activity)=>{if(reorder.isPending){event.preventDefault();return}setInlineEdit(null);setDraggedId(item.id);setDragOver(null);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',String(item.id))};
+  const dragOverRow=(event:DragEvent<HTMLTableRowElement>,target:Activity)=>{if(draggedId===null||draggedId===target.id)return;const source=byId.get(draggedId);if(!source||source.parent_id!==target.parent_id){setDragOver(null);return}event.preventDefault();event.dataTransfer.dropEffect='move';const rect=event.currentTarget.getBoundingClientRect();setDragOver({id:target.id,position:event.clientY<rect.top+rect.height/2?'before':'after'})};
+  const dropRow=(event:DragEvent<HTMLTableRowElement>,target:Activity)=>{event.preventDefault();if(draggedId===null||!dragOver||dragOver.id!==target.id)return;reorder.mutate({activityId:draggedId,targetId:target.id,position:dragOver.position})};
+  const dragEnd=()=>{if(!reorder.isPending){setDraggedId(null);setDragOver(null)}};
   if(subproject.isLoading)return <Skeleton variant="rounded" height={500}/>;
   if(subproject.isError||!subproject.data)return <Alert severity="error">Subprojeto nao encontrado.</Alert>;
   const s=subproject.data;
@@ -183,7 +192,7 @@ const hierarchy=useMutation({mutationFn:({activityId,action}:{activityId:number;
     <Card>
 <CardContent sx={{p:0}}>
 <Box sx={{px:2,py:1,bgcolor:'#f8fafc',borderBottom:'1px solid',borderColor:'divider'}}>
-<Typography variant="caption" color="text.secondary">Clique diretamente em uma célula para editar. Enter ou Tab salva; Esc cancela.</Typography>
+<Typography variant="caption" color="text.secondary">Clique diretamente em uma célula para editar. Arraste pelo ícone da EAP para reordenar; atividades pai levam todo o bloco. Enter ou Tab salva; Esc cancela.</Typography>
 </Box>
 <TableContainer>
 <Table size="small">
@@ -256,8 +265,10 @@ const hierarchy=useMutation({mutationFn:({activityId,action}:{activityId:number;
         const invalid=Boolean(predecessor&&item.start_date<nextBusinessDay(predecessor.finish_date));
         const editingField=(field:EditableField)=>inlineEdit?.activityId===item.id&&inlineEdit.field===field;
         const editableSx={cursor:'text','&:hover':{bgcolor:'action.hover'}};
-        return <TableRow key={item.id} hover sx={item.is_summary?{bgcolor:'#f4f7fa'}:invalid?{bgcolor:'#fff8e1'}:undefined}>
-          <TableCell>{item.wbs_code}</TableCell>
+        const dropPosition=dragOver?.id===item.id?dragOver.position:null;
+        const baseBackground=item.is_summary?'#f4f7fa':invalid?'#fff8e1':undefined;
+        return <TableRow key={item.id} hover onDragOver={event=>dragOverRow(event,item)} onDrop={event=>dropRow(event,item)} sx={{bgcolor:baseBackground,opacity:draggedBlockIds.has(item.id)?.48:1,transition:'opacity .15s, background-color .15s',...(dropPosition==='before'?{'& > td':{borderTop:'3px solid',borderTopColor:'primary.main'}}:{}),...(dropPosition==='after'?{'& > td':{borderBottom:'3px solid',borderBottomColor:'primary.main'}}:{})}}>
+          <TableCell><Stack direction="row" alignItems="center" gap={.5}><Tooltip title={item.is_summary?'Arrastar atividade e todo o bloco':'Arrastar atividade'}><Box component="span" draggable={!reorder.isPending} onDragStart={event=>dragStart(event,item)} onDragEnd={dragEnd} sx={{display:'inline-flex',color:'text.secondary',cursor:reorder.isPending?'wait':'grab','&:active':{cursor:'grabbing'}}}><DragIndicatorOutlined fontSize="small"/></Box></Tooltip>{item.wbs_code}</Stack></TableCell>
           <TableCell onClick={()=>!editingField('name')&&startInline(item,'name')} sx={editableSx}>
             {editingField('name')?inlineEditor(item,'name'):<Stack direction="row" alignItems="center" gap={.5} sx={{pl:1+item.depth*3}}>{item.is_summary?<IconButton size="small" onClick={event=>{event.stopPropagation();toggleCollapsed(item.id)}}>{collapsed.has(item.id)?<ChevronRight fontSize="small"/>:<ExpandMore fontSize="small"/>}</IconButton>:<Box sx={{width:28}}/>}{invalid&&<Tooltip title="Conflito de dependencia">
 <WarningAmberOutlined color="warning" fontSize="small"/>

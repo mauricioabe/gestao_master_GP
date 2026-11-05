@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_project_db
 from app.models import Activity, Project, Subproject
-from app.schemas import ActivityCreate, ActivityOut, ActivityUpdate
+from app.schemas import ActivityCreate, ActivityOut, ActivityReorder, ActivityUpdate
 
 
 router = APIRouter(tags=["Cronograma de atividades"])
@@ -100,6 +100,27 @@ def _tree_order(items: list[Activity]) -> list[Activity]:
 
     visit(None)
     return ordered
+
+
+def _reorder_sibling_block(
+    items: list[Activity],
+    item: Activity,
+    target: Activity,
+    position: str,
+) -> None:
+    if item.id == target.id:
+        return
+    if item.parent_id != target.parent_id:
+        raise HTTPException(409, "As atividades devem estar no mesmo nivel da hierarquia")
+    siblings = _children_map(items).get(item.parent_id, [])
+    reordered = [current for current in siblings if current.id != item.id]
+    target_index = next((index for index, current in enumerate(reordered) if current.id == target.id), None)
+    if target_index is None:
+        raise HTTPException(409, "Posicao de destino invalida")
+    insert_at = target_index + (1 if position == "after" else 0)
+    reordered.insert(insert_at, item)
+    for index, current in enumerate(reordered, start=1):
+        current.sort_order = index
 
 def _reindex_wbs(items: list[Activity], prefix: str) -> None:
     children = _children_map(items)
@@ -428,6 +449,22 @@ def outdent_activity(activity_id: int, db: Session = Depends(get_project_db)):
     parent = _activity(db, item.parent_id)
     item.parent_id = parent.parent_id
     subproject = _subproject(db, item.subproject_id)
+    items = _refresh_hierarchy(db, subproject, item.schedule_type)
+    if item.schedule_type == PROJECT_SCHEDULE:
+        _sync_progress(db, item.subproject_id)
+    db.commit()
+    return [_serialize(current, items) for current in items]
+
+
+@router.post("/activities/{activity_id}/reorder", response_model=list[ActivityOut])
+def reorder_activity(activity_id: int, body: ActivityReorder, db: Session = Depends(get_project_db)):
+    item = _activity(db, activity_id)
+    target = _activity(db, body.target_id)
+    if item.subproject_id != target.subproject_id or item.schedule_type != target.schedule_type:
+        raise HTTPException(409, "A atividade de destino pertence a outro cronograma")
+    subproject = _subproject(db, item.subproject_id)
+    current_items = _items(db, item.subproject_id, item.schedule_type)
+    _reorder_sibling_block(current_items, item, target, body.position)
     items = _refresh_hierarchy(db, subproject, item.schedule_type)
     if item.schedule_type == PROJECT_SCHEDULE:
         _sync_progress(db, item.subproject_id)

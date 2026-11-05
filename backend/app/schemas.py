@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -241,6 +242,11 @@ class ActivityCreate(ActivityBase):
 
 class ActivityUpdate(ActivityBase):
     pass
+
+
+class ActivityReorder(BaseModel):
+    target_id: int = Field(gt=0)
+    position: Literal["before", "after"]
 
 
 class ActivityOut(ActivityBase):

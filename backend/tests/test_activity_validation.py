@@ -1,10 +1,17 @@
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
 from app.schemas import ActivityCreate
-from app.api.activities import _business_days, _finish_for_business_days, _next_business_day
+from app.api.activities import (
+    _business_days,
+    _finish_for_business_days,
+    _next_business_day,
+    _reorder_sibling_block,
+    _tree_order,
+)
 
 
 def payload(**changes):
@@ -65,3 +72,40 @@ def test_duration_counts_only_business_days():
 def test_dependency_adjustment_skips_weekend():
     assert _next_business_day(date(2026, 10, 16)) == date(2026, 10, 19)
     assert _finish_for_business_days(date(2026, 10, 16), 2) == date(2026, 10, 19)
+
+
+def activity(item_id, parent_id, sort_order):
+    return SimpleNamespace(id=item_id, parent_id=parent_id, sort_order=sort_order)
+
+
+def test_reorder_parent_moves_its_complete_block():
+    parent = activity(1, None, 1)
+    child = activity(2, 1, 2)
+    sibling = activity(3, None, 3)
+    items = [parent, child, sibling]
+
+    _reorder_sibling_block(items, parent, sibling, "after")
+
+    assert [item.id for item in _tree_order(items)] == [3, 1, 2]
+
+
+def test_reorder_children_preserves_parent():
+    parent = activity(1, None, 1)
+    first = activity(2, 1, 2)
+    second = activity(3, 1, 3)
+    items = [parent, first, second]
+
+    _reorder_sibling_block(items, second, first, "before")
+
+    assert [item.id for item in _tree_order(items)] == [1, 3, 2]
+    assert second.parent_id == parent.id
+
+
+def test_reorder_rejects_different_hierarchy_levels():
+    parent = activity(1, None, 1)
+    child = activity(2, 1, 2)
+
+    with pytest.raises(Exception) as error:
+        _reorder_sibling_block([parent, child], child, parent, "before")
+
+    assert getattr(error.value, "status_code", None) == 409
