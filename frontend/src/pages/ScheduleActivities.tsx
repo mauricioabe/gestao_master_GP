@@ -13,6 +13,7 @@ const deliveryStatusOptions=[
   {value:'CANCELADA' as const,label:'Cancelada',color:'#667085',icon:<CancelOutlined fontSize="small"/>},
 ];
 const date=(value:string)=>new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC'}).format(new Date(`${value}T00:00:00Z`));
+const currentDate=()=>{const now=new Date();return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`};
 const iso=(value:string)=>new Date(`${value}T00:00:00Z`);
 const nextBusinessDay=(value:string)=>{const d=iso(value);do{d.setUTCDate(d.getUTCDate()+1)}while(d.getUTCDay()===0||d.getUTCDay()===6);return d.toISOString().slice(0,10)};
 const duration=(start:string,finish:string)=>{let current=iso(start);const end=iso(finish);let total=0;while(current<=end){if(current.getUTCDay()!==0&&current.getUTCDay()!==6)total++;current.setUTCDate(current.getUTCDate()+1)}return total};
@@ -67,7 +68,7 @@ const visibleItems=useMemo(()=>items.filter(item=>{let parentId=item.parent_id;c
   const conflicts=useMemo(()=>items.filter(item=>{const predecessor=item.predecessor_id?byId.get(item.predecessor_id):null;return predecessor&&item.start_date<nextBusinessDay(predecessor.finish_date)}),[items,byId]);
   const selectedPredecessor=form.predecessor_id?byId.get(form.predecessor_id):null;
   const formConflict=Boolean(selectedPredecessor&&form.start_date&&form.start_date<nextBusinessDay(selectedPredecessor.finish_date));
-  useEffect(()=>{if(open&&!editing&&subproject.data){setForm({...empty,start_date:subproject.data.planned_start_date,finish_date:subproject.data.planned_start_date})}},[open,editing,subproject.data]);
+  useEffect(()=>{if(open&&!editing&&subproject.data){const today=currentDate();setForm({...empty,start_date:today,finish_date:today})}},[open,editing,subproject.data]);
   useEffect(()=>{if(cff.data)setSelectedCff(new Set(cff.data.stages.filter(stage=>stage.importable&&!stage.imported).map(stage=>stage.id)))},[cff.data]);
   const close=()=>{setOpen(false);setEditing(null);setForm(empty);setError('')};
   const showCreate=()=>{setEditing(null);setOpen(true)};

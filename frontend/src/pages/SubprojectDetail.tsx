@@ -12,6 +12,7 @@ const date=(value:string|null)=>value?new Intl.DateTimeFormat('pt-BR',{timeZone:
 const money=(value:number|string|null)=>value==null?'Não informado':new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(value));
 const utc=(value:string)=>new Date(`${value}T00:00:00Z`);
 const iso=(value:Date)=>value.toISOString().slice(0,10);
+const currentDate=()=>{const now=new Date();return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`};
 const monday=(value:Date)=>{const result=new Date(value);const day=result.getUTCDay();result.setUTCDate(result.getUTCDate()-(day===0?6:day-1));return result};
 const addDays=(value:Date,days:number)=>{const result=new Date(value);result.setUTCDate(result.getUTCDate()+days);return result};
 const clamp=(value:number,min:number,max:number)=>Math.max(min,Math.min(max,value));
@@ -30,7 +31,8 @@ function WeeklyGantt({activities,subproject,reportsVisible,onToggleReports}:{act
   const scrollRef=useRef<HTMLDivElement|null>(null);
   const [page,setPage]=useState(1);
   const [statusFilter,setStatusFilter]=useState<'TODAS'|Activity['delivery_status']>('TODAS');
-  const today=utc(new Date().toISOString().slice(0,10));
+  const todayIso=currentDate();
+  const today=utc(todayIso);
   const allRows=activities.filter(activity=>!activity.is_summary);
   const activityStatus=(activity:Activity):Activity['delivery_status']=>activity.delivery_status||(activity.execution_percentage===100?'ENCERRADA':activity.execution_percentage>0?'EM_EXECUCAO':'EM_PLANEJAMENTO');
   const rows=statusFilter==='TODAS'?allRows:allRows.filter(activity=>activityStatus(activity)===statusFilter);
@@ -38,13 +40,12 @@ function WeeklyGantt({activities,subproject,reportsVisible,onToggleReports}:{act
   const pageSize=18;
   const pageCount=Math.max(1,Math.ceil(rows.length/pageSize));
   const range=useMemo(()=>{
-    const starts=[subproject.planned_start_date,...allRows.map(row=>row.start_date)].map(utc);
-    const finishes=[subproject.planned_end_date,...allRows.map(row=>row.finish_date)].map(utc);
-    const start=monday(new Date(Math.min(...starts.map(Number))));
+    const start=utc(todayIso);
+    const finishes=[todayIso,subproject.planned_end_date,...allRows.map(row=>row.finish_date)].map(utc);
     const finish=addDays(monday(new Date(Math.max(...finishes.map(Number)))),6);
     const weeks=Math.max(1,Math.ceil((Number(finish)-Number(start)+DAY)/(7*DAY)));
     return {start,finish,weeks};
-  },[allRows,subproject.planned_start_date,subproject.planned_end_date]);
+  },[allRows,subproject.planned_end_date,todayIso]);
   const weekWidth=76;const labelWidth=390;const timelineWidth=range.weeks*weekWidth;
   const position=(value:string)=>(Number(utc(value))-Number(range.start))/(7*DAY)*weekWidth;
   const todayPosition=(Number(today)-Number(range.start))/(7*DAY)*weekWidth;
