@@ -40,7 +40,8 @@ function WeeklyGantt({activities,subproject,reportsVisible,onToggleReports}:{act
   const pageSize=18;
   const pageCount=Math.max(1,Math.ceil(rows.length/pageSize));
   const range=useMemo(()=>{
-    const start=utc(todayIso);
+    const starts=(allRows.length?allRows.map(row=>row.start_date):[todayIso]).map(utc);
+    const start=new Date(Math.min(...starts.map(Number)));
     const finishes=[todayIso,subproject.planned_end_date,...allRows.map(row=>row.finish_date)].map(utc);
     const finish=addDays(monday(new Date(Math.max(...finishes.map(Number)))),6);
     const weeks=Math.max(1,Math.ceil((Number(finish)-Number(start)+DAY)/(7*DAY)));
