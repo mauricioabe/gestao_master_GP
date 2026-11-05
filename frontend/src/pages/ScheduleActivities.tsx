@@ -43,6 +43,7 @@ export default function ScheduleActivities({mode='milestones'}:{mode?:'milestone
   const [cffResult,setCffResult]=useState('');
   const [draggedId,setDraggedId]=useState<number|null>(null);
   const [dragOver,setDragOver]=useState<{id:number;position:DropPosition}|null>(null);
+  const draggedIdRef=useRef<number|null>(null);
   const skipInlineBlur=useRef(false);
   // Duracao do formulario no momento em que o inicio entra em edicao.
   const formDuration=useRef(0);
@@ -140,10 +141,12 @@ const hierarchy=useMutation({mutationFn:({activityId,action}:{activityId:number;
   const adjustForm=()=>{if(!selectedPredecessor)return;const days=duration(form.start_date||selectedPredecessor.finish_date,form.finish_date||form.start_date||selectedPredecessor.finish_date);const start=nextBusinessDay(selectedPredecessor.finish_date);setForm({...form,start_date:start,finish_date:finishForBusinessDays(start,days)});setError('')};
   const submit=()=>{setError('');if(!form.name.trim()||!form.start_date||!form.finish_date){setError('Informe o nome, a data de inicio e a data de termino.');return}if(formConflict){setError('A atividade sucessora deve iniciar depois do termino da predecessora. Use Ajustar datas.');return}save.mutate()};
   const removeItem=(item:Activity)=>{if(window.confirm(`Excluir a atividade "${item.name}"?`))remove.mutate(item.id)};
-  const dragStart=(event:DragEvent<HTMLElement>,item:Activity)=>{if(reorder.isPending){event.preventDefault();return}setInlineEdit(null);setDraggedId(item.id);setDragOver(null);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',String(item.id))};
-  const dragOverRow=(event:DragEvent<HTMLTableRowElement>,target:Activity)=>{if(draggedId===null||draggedId===target.id)return;const source=byId.get(draggedId);if(!source||source.parent_id!==target.parent_id){setDragOver(null);return}event.preventDefault();event.dataTransfer.dropEffect='move';const rect=event.currentTarget.getBoundingClientRect();setDragOver({id:target.id,position:event.clientY<rect.top+rect.height/2?'before':'after'})};
-  const dropRow=(event:DragEvent<HTMLTableRowElement>,target:Activity)=>{event.preventDefault();if(draggedId===null||!dragOver||dragOver.id!==target.id)return;reorder.mutate({activityId:draggedId,targetId:target.id,position:dragOver.position})};
-  const dragEnd=()=>{if(!reorder.isPending){setDraggedId(null);setDragOver(null)}};
+  const dropPosition=(event:DragEvent<HTMLTableRowElement>):DropPosition=>{const rect=event.currentTarget.getBoundingClientRect();return event.clientY<rect.top+rect.height/2?'before':'after'};
+  const dragSourceId=(event:DragEvent<HTMLElement>)=>{const transferred=Number(event.dataTransfer.getData('text/plain'));return Number.isInteger(transferred)&&transferred>0?transferred:draggedIdRef.current};
+  const dragStart=(event:DragEvent<HTMLElement>,item:Activity)=>{if(reorder.isPending){event.preventDefault();return}setInlineEdit(null);draggedIdRef.current=item.id;setDraggedId(item.id);setDragOver(null);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',String(item.id))};
+  const dragOverRow=(event:DragEvent<HTMLTableRowElement>,target:Activity)=>{const sourceId=draggedIdRef.current;if(sourceId===null||sourceId===target.id)return;const source=byId.get(sourceId);if(!source||source.parent_id!==target.parent_id){setDragOver(null);return}event.preventDefault();event.dataTransfer.dropEffect='move';const position=dropPosition(event);setDragOver(current=>current?.id===target.id&&current.position===position?current:{id:target.id,position})};
+  const dropRow=(event:DragEvent<HTMLTableRowElement>,target:Activity)=>{event.preventDefault();event.stopPropagation();const sourceId=dragSourceId(event);const source=sourceId===null?undefined:byId.get(sourceId);if(!source||source.id===target.id||source.parent_id!==target.parent_id){setDragOver(null);return}const position=dropPosition(event);reorder.mutate({activityId:source.id,targetId:target.id,position})};
+  const dragEnd=()=>{draggedIdRef.current=null;if(!reorder.isPending){setDraggedId(null);setDragOver(null)}};
   if(subproject.isLoading)return <Skeleton variant="rounded" height={500}/>;
   if(subproject.isError||!subproject.data)return <Alert severity="error">Subprojeto nao encontrado.</Alert>;
   const s=subproject.data;
