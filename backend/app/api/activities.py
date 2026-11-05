@@ -102,7 +102,7 @@ def _tree_order(items: list[Activity]) -> list[Activity]:
     return ordered
 
 
-def _reorder_sibling_block(
+def _move_activity_block(
     items: list[Activity],
     item: Activity,
     target: Activity,
@@ -110,17 +110,43 @@ def _reorder_sibling_block(
 ) -> None:
     if item.id == target.id:
         return
-    if item.parent_id != target.parent_id:
-        raise HTTPException(409, "As atividades devem estar no mesmo nivel da hierarquia")
-    siblings = _children_map(items).get(item.parent_id, [])
-    reordered = [current for current in siblings if current.id != item.id]
-    target_index = next((index for index, current in enumerate(reordered) if current.id == target.id), None)
-    if target_index is None:
-        raise HTTPException(409, "Posicao de destino invalida")
-    insert_at = target_index + (1 if position == "after" else 0)
-    reordered.insert(insert_at, item)
-    for index, current in enumerate(reordered, start=1):
+    by_id = {current.id: current for current in items}
+    new_parent_id = target.id if position == "inside" else target.parent_id
+
+    # O novo pai nunca pode ser a propria atividade nem um de seus
+    # descendentes, pois isso criaria um ciclo e ocultaria todo o bloco.
+    ancestor_id, visited = new_parent_id, set()
+    while ancestor_id is not None and ancestor_id in by_id and ancestor_id not in visited:
+        if ancestor_id == item.id:
+            raise HTTPException(409, "Uma atividade nao pode ser movida para dentro do proprio bloco")
+        visited.add(ancestor_id)
+        ancestor_id = by_id[ancestor_id].parent_id
+
+    children = _children_map(items)
+    old_parent_id = item.parent_id
+    old_siblings = [current for current in children.get(old_parent_id, []) if current.id != item.id]
+    destination = old_siblings if old_parent_id == new_parent_id else list(children.get(new_parent_id, []))
+
+    if position == "inside":
+        insert_at = len(destination)
+    else:
+        target_index = next((index for index, current in enumerate(destination) if current.id == target.id), None)
+        if target_index is None:
+            raise HTTPException(409, "Posicao de destino invalida")
+        insert_at = target_index + (1 if position == "after" else 0)
+
+    item.parent_id = new_parent_id
+    destination.insert(insert_at, item)
+    for index, current in enumerate(destination, start=1):
         current.sort_order = index
+    if old_parent_id != new_parent_id:
+        for index, current in enumerate(old_siblings, start=1):
+            current.sort_order = index
+
+
+# Mantem o nome usado por integracoes e testes anteriores.
+def _reorder_sibling_block(items: list[Activity], item: Activity, target: Activity, position: str) -> None:
+    _move_activity_block(items, item, target, position)
 
 def _reindex_wbs(items: list[Activity], prefix: str) -> None:
     children = _children_map(items)
@@ -464,7 +490,7 @@ def reorder_activity(activity_id: int, body: ActivityReorder, db: Session = Depe
         raise HTTPException(409, "A atividade de destino pertence a outro cronograma")
     subproject = _subproject(db, item.subproject_id)
     current_items = _items(db, item.subproject_id, item.schedule_type)
-    _reorder_sibling_block(current_items, item, target, body.position)
+    _move_activity_block(current_items, item, target, body.position)
     items = _refresh_hierarchy(db, subproject, item.schedule_type)
     if item.schedule_type == PROJECT_SCHEDULE:
         _sync_progress(db, item.subproject_id)

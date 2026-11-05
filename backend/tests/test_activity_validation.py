@@ -8,6 +8,7 @@ from app.schemas import ActivityCreate
 from app.api.activities import (
     _business_days,
     _finish_for_business_days,
+    _move_activity_block,
     _next_business_day,
     _reorder_sibling_block,
     _tree_order,
@@ -101,11 +102,37 @@ def test_reorder_children_preserves_parent():
     assert second.parent_id == parent.id
 
 
-def test_reorder_rejects_different_hierarchy_levels():
+def test_move_activity_to_another_deliverable():
+    first_parent = activity(1, None, 1)
+    child = activity(2, 1, 2)
+    second_parent = activity(3, None, 3)
+    second_child = activity(4, 3, 4)
+    items = [first_parent, child, second_parent, second_child]
+
+    _move_activity_block(items, child, second_parent, "inside")
+
+    assert child.parent_id == second_parent.id
+    assert [item.id for item in _tree_order(items)] == [1, 3, 4, 2]
+
+
+def test_move_activity_between_children_of_another_deliverable():
+    first_parent = activity(1, None, 1)
+    child = activity(2, 1, 2)
+    second_parent = activity(3, None, 3)
+    second_child = activity(4, 3, 4)
+    items = [first_parent, child, second_parent, second_child]
+
+    _move_activity_block(items, child, second_child, "before")
+
+    assert child.parent_id == second_parent.id
+    assert [item.id for item in _tree_order(items)] == [1, 3, 2, 4]
+
+
+def test_move_rejects_parent_inside_own_descendant():
     parent = activity(1, None, 1)
     child = activity(2, 1, 2)
 
     with pytest.raises(Exception) as error:
-        _reorder_sibling_block([parent, child], child, parent, "before")
+        _move_activity_block([parent, child], parent, child, "inside")
 
     assert getattr(error.value, "status_code", None) == 409

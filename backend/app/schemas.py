@@ -246,7 +246,7 @@ class ActivityUpdate(ActivityBase):
 
 class ActivityReorder(BaseModel):
     target_id: int = Field(gt=0)
-    position: Literal["before", "after"]
+    position: Literal["before", "after", "inside"]
 
 
 class ActivityOut(ActivityBase):

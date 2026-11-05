@@ -20,7 +20,7 @@ const finishForBusinessDays=(start:string,days:number)=>{const d=iso(start);let 
 const money=(value:number|string|null)=>value==null?'-':new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(value));
 type EditableField='name'|'start_date'|'finish_date'|'resource_names'|'execution_percentage'|'planned_value'|'actual_value'|'predecessor_id';
 type InlineEdit={activityId:number;field:EditableField};
-type DropPosition='before'|'after';
+type DropPosition='before'|'after'|'inside';
 
 export default function ScheduleActivities({mode='milestones'}:{mode?:'milestones'|'project'}){
   const {subprojectId}=useParams();
@@ -141,11 +141,12 @@ const hierarchy=useMutation({mutationFn:({activityId,action}:{activityId:number;
   const adjustForm=()=>{if(!selectedPredecessor)return;const days=duration(form.start_date||selectedPredecessor.finish_date,form.finish_date||form.start_date||selectedPredecessor.finish_date);const start=nextBusinessDay(selectedPredecessor.finish_date);setForm({...form,start_date:start,finish_date:finishForBusinessDays(start,days)});setError('')};
   const submit=()=>{setError('');if(!form.name.trim()||!form.start_date||!form.finish_date){setError('Informe o nome, a data de inicio e a data de termino.');return}if(formConflict){setError('A atividade sucessora deve iniciar depois do termino da predecessora. Use Ajustar datas.');return}save.mutate()};
   const removeItem=(item:Activity)=>{if(window.confirm(`Excluir a atividade "${item.name}"?`))remove.mutate(item.id)};
-  const dropPosition=(event:DragEvent<HTMLTableRowElement>):DropPosition=>{const rect=event.currentTarget.getBoundingClientRect();return event.clientY<rect.top+rect.height/2?'before':'after'};
+  const targetBelongsToBlock=(sourceId:number,targetId:number)=>{let current=byId.get(targetId);const visited=new Set<number>();while(current&&!visited.has(current.id)){if(current.id===sourceId)return true;visited.add(current.id);current=current.parent_id?byId.get(current.parent_id):undefined}return false};
+  const dropPositionFor=(event:DragEvent<HTMLTableRowElement>,source:Activity,target:Activity):DropPosition=>{const rect=event.currentTarget.getBoundingClientRect();const ratio=(event.clientY-rect.top)/rect.height;if(source.depth>target.depth&&(target.is_summary||target.depth===0)&&ratio>=.25&&ratio<=.75)return'inside';return ratio<.5?'before':'after'};
   const dragSourceId=(event:DragEvent<HTMLElement>)=>{const transferred=Number(event.dataTransfer.getData('text/plain'));return Number.isInteger(transferred)&&transferred>0?transferred:draggedIdRef.current};
   const dragStart=(event:DragEvent<HTMLElement>,item:Activity)=>{if(reorder.isPending){event.preventDefault();return}setInlineEdit(null);draggedIdRef.current=item.id;setDraggedId(item.id);setDragOver(null);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',String(item.id))};
-  const dragOverRow=(event:DragEvent<HTMLTableRowElement>,target:Activity)=>{const sourceId=draggedIdRef.current;if(sourceId===null||sourceId===target.id)return;const source=byId.get(sourceId);if(!source||source.parent_id!==target.parent_id){setDragOver(null);return}event.preventDefault();event.dataTransfer.dropEffect='move';const position=dropPosition(event);setDragOver(current=>current?.id===target.id&&current.position===position?current:{id:target.id,position})};
-  const dropRow=(event:DragEvent<HTMLTableRowElement>,target:Activity)=>{event.preventDefault();event.stopPropagation();const sourceId=dragSourceId(event);const source=sourceId===null?undefined:byId.get(sourceId);if(!source||source.id===target.id||source.parent_id!==target.parent_id){setDragOver(null);return}const position=dropPosition(event);reorder.mutate({activityId:source.id,targetId:target.id,position})};
+  const dragOverRow=(event:DragEvent<HTMLTableRowElement>,target:Activity)=>{const sourceId=draggedIdRef.current;if(sourceId===null||targetBelongsToBlock(sourceId,target.id)){setDragOver(null);return}const source=byId.get(sourceId);if(!source){setDragOver(null);return}event.preventDefault();event.dataTransfer.dropEffect='move';const position=dropPositionFor(event,source,target);setDragOver(current=>current?.id===target.id&&current.position===position?current:{id:target.id,position})};
+  const dropRow=(event:DragEvent<HTMLTableRowElement>,target:Activity)=>{event.preventDefault();event.stopPropagation();const sourceId=dragSourceId(event);const source=sourceId===null?undefined:byId.get(sourceId);if(!source||targetBelongsToBlock(source.id,target.id)){setDragOver(null);return}const position=dropPositionFor(event,source,target);reorder.mutate({activityId:source.id,targetId:target.id,position})};
   const dragEnd=()=>{draggedIdRef.current=null;if(!reorder.isPending){setDraggedId(null);setDragOver(null)}};
   if(subproject.isLoading)return <Skeleton variant="rounded" height={500}/>;
   if(subproject.isError||!subproject.data)return <Alert severity="error">Subprojeto nao encontrado.</Alert>;
@@ -195,7 +196,7 @@ const hierarchy=useMutation({mutationFn:({activityId,action}:{activityId:number;
     <Card>
 <CardContent sx={{p:0}}>
 <Box sx={{px:2,py:1,bgcolor:'#f8fafc',borderBottom:'1px solid',borderColor:'divider'}}>
-<Typography variant="caption" color="text.secondary">Clique diretamente em uma célula para editar. Arraste pelo ícone da EAP para reordenar; atividades pai levam todo o bloco. Enter ou Tab salva; Esc cancela.</Typography>
+<Typography variant="caption" color="text.secondary">Clique diretamente em uma célula para editar. Arraste pela EAP para reordenar; solte no centro de outro entregável para mudar o vínculo. Atividades pai levam todo o bloco.</Typography>
 </Box>
 <TableContainer>
 <Table size="small">
@@ -270,7 +271,7 @@ const hierarchy=useMutation({mutationFn:({activityId,action}:{activityId:number;
         const editableSx={cursor:'text','&:hover':{bgcolor:'action.hover'}};
         const dropPosition=dragOver?.id===item.id?dragOver.position:null;
         const baseBackground=item.is_summary?'#f4f7fa':invalid?'#fff8e1':undefined;
-        return <TableRow key={item.id} hover onDragOver={event=>dragOverRow(event,item)} onDrop={event=>dropRow(event,item)} sx={{bgcolor:baseBackground,opacity:draggedBlockIds.has(item.id)?.48:1,transition:'opacity .15s, background-color .15s',...(dropPosition==='before'?{'& > td':{borderTop:'3px solid',borderTopColor:'primary.main'}}:{}),...(dropPosition==='after'?{'& > td':{borderBottom:'3px solid',borderBottomColor:'primary.main'}}:{})}}>
+        return <TableRow key={item.id} hover onDragOver={event=>dragOverRow(event,item)} onDrop={event=>dropRow(event,item)} sx={{bgcolor:dropPosition==='inside'?'rgba(13, 71, 128, .11)':baseBackground,opacity:draggedBlockIds.has(item.id)?.48:1,transition:'opacity .15s, background-color .15s',...(dropPosition==='before'?{'& > td':{borderTop:'3px solid',borderTopColor:'primary.main'}}:{}),...(dropPosition==='after'?{'& > td':{borderBottom:'3px solid',borderBottomColor:'primary.main'}}:{}),...(dropPosition==='inside'?{'& > td:first-of-type':{borderLeft:'4px solid',borderLeftColor:'primary.main'}}:{})}}>
           <TableCell><Stack direction="row" alignItems="center" gap={.5}><Tooltip title={item.is_summary?'Arrastar atividade e todo o bloco':'Arrastar atividade'}><Box component="span" draggable={!reorder.isPending} onDragStart={event=>dragStart(event,item)} onDragEnd={dragEnd} sx={{display:'inline-flex',color:'text.secondary',cursor:reorder.isPending?'wait':'grab','&:active':{cursor:'grabbing'}}}><DragIndicatorOutlined fontSize="small"/></Box></Tooltip>{item.wbs_code}</Stack></TableCell>
           <TableCell onClick={()=>!editingField('name')&&startInline(item,'name')} sx={editableSx}>
             {editingField('name')?inlineEditor(item,'name'):<Stack direction="row" alignItems="center" gap={.5} sx={{pl:1+item.depth*3}}>{item.is_summary?<IconButton size="small" onClick={event=>{event.stopPropagation();toggleCollapsed(item.id)}}>{collapsed.has(item.id)?<ChevronRight fontSize="small"/>:<ExpandMore fontSize="small"/>}</IconButton>:<Box sx={{width:28}}/>}{invalid&&<Tooltip title="Conflito de dependencia">
