@@ -14,6 +14,14 @@ ROLES = {
         "name": "Gerente de projetos",
         "permissions": [VIEW_PROJECTS, MANAGE_PROJECTS, MANAGE_SUBPROJECTS, MANAGE_SCHEDULE, MANAGE_DOCUMENTS],
     },
+    "COORDENADOR_PROJETOS": {
+        "name": "Coordenador de Projetos",
+        "permissions": [VIEW_PROJECTS, MANAGE_PROJECTS, MANAGE_SUBPROJECTS, MANAGE_SCHEDULE, MANAGE_DOCUMENTS],
+    },
+    "CHEFE_ASS_PJT": {
+        "name": "Chefe Ass Pjt",
+        "permissions": [VIEW_PROJECTS, MANAGE_PROJECTS, MANAGE_SUBPROJECTS, MANAGE_SCHEDULE, MANAGE_DOCUMENTS],
+    },
     "SUPERVISOR_PROJETO": {
         "name": "Supervisor do projeto",
         "permissions": [VIEW_PROJECTS, MANAGE_SUBPROJECTS, MANAGE_SCHEDULE, MANAGE_DOCUMENTS],
@@ -21,6 +29,18 @@ ROLES = {
     "ANALISTA_PROJETOS": {
         "name": "Analista de projetos",
         "permissions": [VIEW_PROJECTS, MANAGE_SUBPROJECTS, MANAGE_SCHEDULE, MANAGE_DOCUMENTS],
+    },
+    "ANALISTA_LICITACOES": {
+        "name": "Analista de licitações",
+        "permissions": [VIEW_PROJECTS, MANAGE_SUBPROJECTS, MANAGE_SCHEDULE, MANAGE_DOCUMENTS],
+    },
+    "ANALISTA_CONTRATOS": {
+        "name": "Analista de contratos",
+        "permissions": [VIEW_PROJECTS, MANAGE_SUBPROJECTS, MANAGE_SCHEDULE, MANAGE_DOCUMENTS],
+    },
+    "AUDITOR_INTERNO": {
+        "name": "Auditor interno",
+        "permissions": [VIEW_PROJECTS],
     },
     "EQUIPE_PROJETO": {
         "name": "Equipe de projeto",

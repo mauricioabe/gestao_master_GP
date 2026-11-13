@@ -1,14 +1,16 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_project_db
-from app.core.permissions import MANAGE_USERS, ROLES, permissions_for_role
+from app.core.permissions import MANAGE_USERS, VIEW_PROJECTS, ROLES, permissions_for_role
 from app.core.security import create_token, hash_password, verify_password
 from app.models import User
-from app.schemas import LoginRequest, TokenResponse, UserCreate, UserOut, UserUpdate
+from app.schemas import AssignmentUserOut, LoginRequest, TokenResponse, UserCreate, UserIdentity, UserOut, UserUpdate
+from app.user_identity import assignment_user_data
 from .deps import current_user, require_permissions
 
 
@@ -23,17 +25,24 @@ def login(body: LoginRequest, db: Session = Depends(get_project_db)):
         raise HTTPException(401, "Login ou senha inválidos")
     user.last_login_at = datetime.utcnow()
     db.commit()
-    return TokenResponse(access_token=create_token(user.login, user.role), role=user.role, name=user.name, permissions=permissions_for_role(user.role))
+    return TokenResponse(access_token=create_token(user.login, user.role), role=user.role, name=user.display_name, permissions=permissions_for_role(user.role))
 
 
 @router.get("/me")
 def me(user: User = Depends(current_user)):
-    return {"id": user.id, "login": user.login, "name": user.name, "role": user.role, "permissions": permissions_for_role(user.role)}
+    return {"id": user.id, "login": user.login, "name": user.name, "display_name": user.display_name,
+            "person_type": user.person_type, "rank": user.rank, "war_name": user.war_name,
+            "role": user.role, "permissions": permissions_for_role(user.role)}
 
 
 @users_router.get("/roles")
 def roles(_: User = Depends(require_permissions(MANAGE_USERS))):
     return [{"code": code, **data} for code, data in ROLES.items()]
+
+
+@users_router.get('/assignment-options', response_model=list[AssignmentUserOut])
+def assignment_options(db: Session = Depends(get_project_db), _: User = Depends(require_permissions(VIEW_PROJECTS))):
+    return [assignment_user_data(user) for user in db.scalars(select(User).where(User.active.is_(True)).order_by(User.name))]
 
 
 @users_router.get("", response_model=list[UserOut])
@@ -47,7 +56,8 @@ def create_user(body: UserCreate, db: Session = Depends(get_project_db), _: User
         raise HTTPException(422, "Perfil inválido")
     if db.scalar(select(User).where(User.login == body.login.strip())):
         raise HTTPException(409, "Login já cadastrado")
-    user = User(login=body.login.strip(), name=body.name.strip(), password_hash=hash_password(body.password), role=body.role)
+    user = User(login=body.login.strip(), name=body.name, person_type=body.person_type,
+                rank=body.rank, war_name=body.war_name, password_hash=hash_password(body.password), role=body.role)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -68,7 +78,14 @@ def update_user(user_id: int, body: UserUpdate, db: Session = Depends(get_projec
         total = db.scalar(select(func.count()).select_from(User).where(User.role == "GESTOR_PROGRAMA", User.active.is_(True)))
         if int(total or 0) <= 1:
             raise HTTPException(422, "O sistema deve manter pelo menos um Gestor do Programa ativo")
-    if body.name is not None: user.name = body.name.strip()
+    identity_fields = {'name', 'person_type', 'rank', 'war_name'}
+    supplied = body.model_dump(exclude_unset=True, include=identity_fields)
+    try:
+        identity = UserIdentity.model_validate({**{key: getattr(user, key) for key in identity_fields}, **supplied})
+    except ValidationError as exc:
+        raise HTTPException(422, 'Informe nome completo e, para militares, posto e nome de guerra válidos') from exc
+    for key, value in identity.model_dump().items():
+        setattr(user, key, value)
     if body.role is not None: user.role = body.role
     if body.active is not None: user.active = body.active
     if body.password: user.password_hash = hash_password(body.password)

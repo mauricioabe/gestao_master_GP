@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {AccountTreeOutlined,CalendarMonthOutlined,ChevronLeft,ChevronRight,DashboardOutlined,DescriptionOutlined,FolderSpecialOutlined,LogoutOutlined,ManageAccountsOutlined,Menu as MenuIcon,NotificationsNoneOutlined,TimelineOutlined} from '@mui/icons-material';
+import {AccountTreeOutlined,CalendarMonthOutlined,ChevronLeft,ChevronRight,DashboardOutlined,DescriptionOutlined,FolderSpecialOutlined,LogoutOutlined,ManageAccountsOutlined,MenuBookOutlined,Menu as MenuIcon,NotificationsNoneOutlined,TimelineOutlined} from '@mui/icons-material';
 import {AppBar,Avatar,Badge,Box,Button,Drawer,IconButton,List,ListItemButton,ListItemIcon,ListItemText,Stack,Toolbar,Tooltip,Typography,useMediaQuery,useTheme} from '@mui/material';
 import {NavLink,Outlet,useNavigate} from 'react-router-dom';
 import {can,clearSession,MANAGE_USERS,roleNames} from '../auth';
@@ -10,6 +10,7 @@ const entries=[
   {to:'/',label:'Visao geral',icon:<DashboardOutlined/>,end:true},
   {to:'/projetos',label:'Projetos',icon:<FolderSpecialOutlined/>},
   {to:'/subprojetos',label:'Subprojetos',icon:<AccountTreeOutlined/>},
+  {to:'/diarios',label:'Diário de Bordo',icon:<MenuBookOutlined/>},
   {to:'/cronograma',label:'Cronogramas',icon:<CalendarMonthOutlined/>},
   {to:'/indicadores',label:'Indicadores',icon:<TimelineOutlined/>},
   {to:'/relatorios',label:'Relatorios',icon:<DescriptionOutlined/>},

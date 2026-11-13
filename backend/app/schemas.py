@@ -18,9 +18,31 @@ class TokenResponse(BaseModel):
     permissions: list[str]
 
 
-class UserCreate(BaseModel):
-    login: str = Field(min_length=2, max_length=80, pattern=r"^[A-Za-z0-9._-]+$")
+MilitaryRank = Literal['Ten', 'Cap', 'Maj', 'TC', 'Cel', 'Cel R1', 'Gen Bda']
+
+
+class UserIdentity(BaseModel):
     name: str = Field(min_length=3, max_length=150)
+    person_type: Literal['CIVIL', 'MILITAR'] = 'CIVIL'
+    rank: MilitaryRank | None = None
+    war_name: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @field_validator('name', 'rank', 'war_name', mode='before')
+    @classmethod
+    def trim_identity(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode='after')
+    def military_identity(self):
+        if self.person_type == 'MILITAR' and (not self.rank or not self.war_name):
+            raise ValueError('Informe o posto e o nome de guerra para usuários militares')
+        if self.person_type == 'CIVIL':
+            self.rank = self.war_name = None
+        return self
+
+
+class UserCreate(UserIdentity):
+    login: str = Field(min_length=2, max_length=80, pattern=r"^[A-Za-z0-9._-]+$")
     password: str = Field(min_length=8, max_length=128)
     role: str
 
@@ -30,18 +52,38 @@ class UserUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=8, max_length=128)
     role: str | None = None
     active: bool | None = None
+    person_type: Literal['CIVIL', 'MILITAR'] | None = None
+    rank: MilitaryRank | None = None
+    war_name: str | None = Field(default=None, min_length=1, max_length=100)
 
 
 class UserOut(BaseModel):
     id: int
     login: str
     name: str
+    person_type: Literal['CIVIL', 'MILITAR']
+    rank: str | None
+    war_name: str | None
+    display_name: str
     role: str
     active: bool
     last_login_at: datetime | None
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class AssignmentUserOut(BaseModel):
+    id: int
+    name: str
+    person_type: Literal['CIVIL', 'MILITAR']
+    rank: str | None
+    war_name: str | None
+    role: str
+    profile_name: str
+    active: bool
+    display_name: str
+    assignment_label: str
 
 
 class ContractSnapshot(BaseModel):
@@ -155,10 +197,13 @@ class SubprojectBase(BaseModel):
     scope: str | None = None
     out_of_scope: str | None = None
     expected_benefits: str | None = None
-    manager: str = Field(min_length=3, max_length=140)
+    manager: str = Field(min_length=3, max_length=150)
+    manager_user_id: int | None = Field(default=None, gt=0)
+    military_responsible_id: int | None = Field(default=None, gt=0)
     responsible_unit: str = Field(min_length=2, max_length=120)
     status: str = "PLANEJAMENTO"
     priority: str = "MEDIA"
+    lifecycle_stage: Literal['INICIACAO', 'CONCEPCAO', 'CONTRATACAO', 'CONCEPCAO_CONTRATACAO', 'EM_PRODUCAO', 'IMPLANTACAO', 'ENTREGA', 'ENCERRADO'] | None = None
     planned_start_date: date
     planned_end_date: date
     real_start_date: date | None = None
@@ -199,6 +244,8 @@ class SubprojectOut(SubprojectBase):
     project_code: str
     parent_name: str | None = None
     children_count: int = 0
+    manager_user: AssignmentUserOut | None = None
+    military_responsible: AssignmentUserOut | None = None
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)

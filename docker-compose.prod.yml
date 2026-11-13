@@ -10,8 +10,11 @@ services:
       CORS_ORIGINS: ${APP_ORIGIN:-http://192.168.30.10:5280}
       JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-480}
+      LOGBOOK_MAX_UPLOAD_SIZE: ${LOGBOOK_MAX_UPLOAD_SIZE:-20971520}
+      LOGBOOK_MAX_BATCH_SIZE: ${LOGBOOK_MAX_BATCH_SIZE:-104857600}
     volumes:
       - app_storage:/srv/storage
+      - logbook_storage:/srv/private_storage
     expose:
       - "8000"
     healthcheck:
@@ -47,6 +50,7 @@ services:
 
 volumes:
   app_storage:
+  logbook_storage:
 
 networks:
   app:

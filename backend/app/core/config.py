@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "altere-esta-chave-em-producao"
     jwt_expire_minutes: int = 480
     cors_origins: str = "http://localhost:5174"
+    logbook_max_upload_size: int = 20 * 1024 * 1024
+    logbook_max_batch_size: int = 100 * 1024 * 1024
     model_config = SettingsConfigDict(env_file="../.env", extra="ignore")
 
     @field_validator("project_database_url")

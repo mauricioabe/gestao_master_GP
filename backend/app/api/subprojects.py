@@ -6,7 +6,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.database import get_project_db
-from app.models import Project, Subproject
+from app.models import Project, Subproject, User
+from app.user_identity import assignment_user_data
 from app.schemas import SubprojectCreate, SubprojectOut, SubprojectUpdate
 
 
@@ -17,6 +18,8 @@ def _query():
     return select(Subproject).options(
         joinedload(Subproject.project),
         joinedload(Subproject.parent),
+        joinedload(Subproject.manager_user),
+        joinedload(Subproject.military_responsible),
         selectinload(Subproject.children),
     )
 
@@ -35,6 +38,8 @@ def _serialize(item: Subproject) -> dict:
         "project_code": item.project.code,
         "parent_name": item.parent.name if item.parent else None,
         "children_count": sum(1 for child in item.children if child.active),
+        "manager_user": assignment_user_data(item.manager_user),
+        "military_responsible": assignment_user_data(item.military_responsible),
     })
     return data
 
@@ -66,9 +71,25 @@ def _next_wbs(db: Session, project_id: int, parent: Subproject | None) -> tuple[
     return f"{prefix}.{order}", order
 
 
-def _apply(item: Subproject, body: SubprojectCreate | SubprojectUpdate) -> None:
-    for field, value in body.model_dump(exclude={"project_id", "parent_id"}).items():
+def _apply(db: Session, item: Subproject, body: SubprojectCreate | SubprojectUpdate) -> None:
+    assignments = {}
+    for field, person_type in [('manager_user_id', 'CIVIL'), ('military_responsible_id', 'MILITAR')]:
+        identifier = getattr(body, field) if field in body.model_fields_set or not item.id else getattr(item, field)
+        user = db.get(User, identifier) if identifier else None
+        if identifier and (not user or user.person_type != person_type or (not user.active and identifier != getattr(item, field))):
+            label = 'usuário civil ativo como gerente' if person_type == 'CIVIL' else 'usuário militar ativo como responsável'
+            raise HTTPException(422, f'Selecione um {label}')
+        if user and person_type == 'MILITAR' and (not user.rank or not user.war_name):
+            raise HTTPException(422, 'O responsável militar deve possuir posto e nome de guerra')
+        assignments[field] = (identifier, user)
+    for field, value in body.model_dump(exclude={"project_id", "parent_id", "manager_user_id", "military_responsible_id"}).items():
         setattr(item, field, value.strip() if isinstance(value, str) else value)
+    for field, (identifier, user) in assignments.items():
+        setattr(item, field, identifier)
+    item.manager_user = assignments['manager_user_id'][1]
+    item.military_responsible = assignments['military_responsible_id'][1]
+    if assignments['manager_user_id'][1]:
+        item.manager = assignments['manager_user_id'][1].name
     item.code = item.code.upper()
 
 
@@ -117,7 +138,7 @@ def create_subproject(body: SubprojectCreate, db: Session = Depends(get_project_
     parent = _validate_parent(db, body.project_id, body.parent_id)
     wbs_code, sort_order = _next_wbs(db, body.project_id, parent)
     item = Subproject(project_id=body.project_id, parent_id=body.parent_id, wbs_code=wbs_code, sort_order=sort_order)
-    _apply(item, body)
+    _apply(db, item, body)
     db.add(item)
     try:
         db.commit()
@@ -132,7 +153,7 @@ def update_subproject(subproject_id: int, body: SubprojectUpdate, db: Session = 
     item = _get_or_404(db, subproject_id)
     if body.project_id != item.project_id or body.parent_id != item.parent_id:
         raise HTTPException(422, "O projeto pai e o nivel hierarquico nao podem ser alterados apos o cadastro")
-    _apply(item, body)
+    _apply(db, item, body)
     try:
         db.commit()
     except IntegrityError as exc:

@@ -2,6 +2,7 @@ from app.core.permissions import (
     MANAGE_PROJECTS,
     MANAGE_SCHEDULE,
     MANAGE_USERS,
+    VIEW_PROJECTS,
     ROLES,
     permissions_for_role,
 )
@@ -15,6 +16,11 @@ def test_expected_project_roles_are_available():
         "EQUIPE_PROJETO",
         "GESTOR_PROGRAMA",
         "SUPERVISOR_PROJETO",
+        "COORDENADOR_PROJETOS",
+        "CHEFE_ASS_PJT",
+        "ANALISTA_LICITACOES",
+        "ANALISTA_CONTRATOS",
+        "AUDITOR_INTERNO",
     }
 
 
@@ -22,6 +28,15 @@ def test_program_manager_governs_users_and_projects():
     permissions = permissions_for_role("GESTOR_PROGRAMA")
     assert MANAGE_USERS in permissions
     assert MANAGE_PROJECTS in permissions
+
+
+def test_procurement_and_contract_analysts_follow_project_analyst_permissions():
+    for role in ['ANALISTA_LICITACOES', 'ANALISTA_CONTRATOS']:
+        assert permissions_for_role(role) == permissions_for_role('ANALISTA_PROJETOS')
+
+
+def test_internal_auditor_is_read_only():
+    assert permissions_for_role('AUDITOR_INTERNO') == [VIEW_PROJECTS]
 
 
 def test_project_team_can_update_schedule_but_not_manage_users():

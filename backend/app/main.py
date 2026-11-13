@@ -10,6 +10,8 @@ from app.api.subproject_contracts import router as subproject_contracts_router
 from app.api.cff_import import router as cff_import_router
 from app.api.auth import router as auth_router, users_router
 from app.api.deps import authorize_api
+from app.api.logbooks import router as logbooks_router
+from app.api.members import router as members_router
 from app.core.config import settings
 
 
@@ -30,6 +32,8 @@ app.include_router(subprojects_router, prefix=settings.api_prefix, dependencies=
 app.include_router(activities_router, prefix=settings.api_prefix, dependencies=protected)
 app.include_router(subproject_contracts_router, prefix=settings.api_prefix, dependencies=protected)
 app.include_router(cff_import_router, prefix=settings.api_prefix, dependencies=protected)
+app.include_router(logbooks_router, prefix=settings.api_prefix, dependencies=protected)
+app.include_router(members_router, prefix=settings.api_prefix, dependencies=protected)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")
 
 

@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_project_db
+from app.core.config import settings
 from app.core.permissions import MANAGE_DOCUMENTS, MANAGE_PROJECTS, MANAGE_SCHEDULE, MANAGE_SUBPROJECTS, permissions_for_role
 from app.core.security import decode_token
 from app.models import User
@@ -39,7 +40,10 @@ def authorize_api(request: Request, user: User = Depends(current_user)) -> User:
         return user
     path = request.url.path
     required = MANAGE_PROJECTS
-    if path.startswith("/api/uploads"):
+    relative = path.removeprefix(settings.api_prefix)
+    if relative.startswith(('/logbooks', '/logbook-attachments', '/team-members')):
+        required = MANAGE_SUBPROJECTS
+    elif path.startswith("/api/uploads"):
         required = MANAGE_DOCUMENTS
     elif "/activities" in path or path.startswith("/api/activities") or path.endswith("/cff/import"):
         required = MANAGE_SCHEDULE

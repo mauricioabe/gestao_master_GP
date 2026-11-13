@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type {LifecycleStage} from './subprojectLifecycle';
 
 export const api=axios.create({baseURL:'/api',timeout:15000});
 api.interceptors.request.use(config=>{const token=localStorage.getItem('token');if(token)config.headers.Authorization=`Bearer ${token}`;return config});
@@ -41,18 +42,22 @@ export type DashboardData={
   linked_contracts:number;average_progress:number;
   by_status:{status:string;total:number}[];
 };
+export type AssignmentUser={id:number;name:string;person_type:'CIVIL'|'MILITAR';rank:string|null;war_name:string|null;role:string;profile_name:string;active:boolean;display_name:string;assignment_label:string};
 export type Subproject={
   id:number;project_id:number;parent_id:number|null;wbs_code:string;sort_order:number;
   code:string;name:string;short_name:string|null;description:string|null;objective:string;
   main_product:string;expected_deliverables:string|null;scope:string|null;out_of_scope:string|null;
   expected_benefits:string|null;manager:string;responsible_unit:string;status:string;priority:string;
+  lifecycle_stage:LifecycleStage|null;
+  manager_user_id:number|null;military_responsible_id:number|null;
+  manager_user:AssignmentUser|null;military_responsible:AssignmentUser|null;
   planned_start_date:string;planned_end_date:string;real_start_date:string|null;real_end_date:string|null;
   execution_percentage:number;budget:number|null;key_milestones:string|null;schedule_status:string|null;
   justification:string|null;active:boolean;project_name:string;project_code:string;parent_name:string|null;
   children_count:number;created_at:string;updated_at:string;
 };
 
-export type SubprojectInput=Omit<Subproject,'id'|'wbs_code'|'sort_order'|'active'|'project_name'|'project_code'|'parent_name'|'children_count'|'created_at'|'updated_at'>;
+export type SubprojectInput=Omit<Subproject,'id'|'wbs_code'|'sort_order'|'active'|'project_name'|'project_code'|'parent_name'|'children_count'|'created_at'|'updated_at'|'manager_user'|'military_responsible'>;
 export type Activity={
   id:number;subproject_id:number;schedule_type:'MILESTONE'|'PROJECT';wbs_code:string;sort_order:number;name:string;duration_days:number;
   start_date:string;finish_date:string;resource_names:string|null;execution_percentage:number;planned_value:number|string;actual_value:number|string;delivery_status:'ENCERRADA'|'EM_EXECUCAO'|'CANCELADA'|'EM_PLANEJAMENTO';predecessor_id:number|null;

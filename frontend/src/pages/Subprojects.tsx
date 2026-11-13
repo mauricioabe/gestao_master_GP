@@ -5,6 +5,7 @@ import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {Link} from 'react-router-dom';
 import {api,Project,Subproject} from '../api';
 import StatusChip from '../components/StatusChip';
+import {lifecycleStages} from '../subprojectLifecycle';
 
 
 export default function Subprojects(){
@@ -73,6 +74,7 @@ export default function Subprojects(){
 <TableCell>EAP</TableCell>
 <TableCell>Subprojeto</TableCell>
 <TableCell>Situacao</TableCell>
+<TableCell>Ciclo de Vida</TableCell>
 <TableCell>Responsavel</TableCell>
 <TableCell align="right">Acoes</TableCell>
 </TableRow>
@@ -89,6 +91,7 @@ export default function Subprojects(){
 <TableCell>
 <StatusChip status={item.status}/>
 </TableCell>
+<TableCell sx={{whiteSpace:'nowrap'}}>{item.lifecycle_stage?lifecycleStages[item.lifecycle_stage]:'Não informado'}</TableCell>
 <TableCell>{item.manager}</TableCell>
 <TableCell align="right">
 <Tooltip title="Visualizar">
